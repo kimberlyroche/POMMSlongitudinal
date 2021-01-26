@@ -4,7 +4,7 @@ library(RColorBrewer)
 library(driver)
 library(fido)
 
-setwd("C:/Users/kim/Documents/POMMSlongitudinal/")
+# setwd("C:/Users/kim/Documents/POMMSlongitudinal/")
 
 # -------------------------------------------------------------------------------------------------
 #   Functions
@@ -32,7 +32,7 @@ generate_highcontrast_palette <- function(S) {
 get_tax_label <- function(taxon_idx, tax_map) {
   tax_pieces <- tax_map[taxon_idx,]
   level_idx <- max(which(!is.na(tax_pieces)))
-  paste0(names(tax_pieces[level_idx]), " ", tax_pieces[level_idx])
+  paste0(names(tax_pieces[level_idx]), " ", as.character(tax_pieces[[level_idx]]))
 }
 
 # `data` is presumed to be taxa x samples
@@ -137,32 +137,33 @@ rownames(tax) <- NULL
 # Visualize these compositions quickly
 # Pick a subset of the data that corresponds to visits 1-5 from subject 192
 #   metadata[metadata$sample_id %in% colnames(counts)[15:19],c("ind_id","visit")]
-counts_subset <- counts[,15:19]
+# counts_subset <- counts[,15:19]
 
-props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
+# props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
 
-# Strip down to taxa
-tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
-rownames(props$data) <- c(tax_labels, "assorted low abundance")
-props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
-plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
-plot_data$taxon <- as.factor(plot_data$taxon)
-palette <- generate_highcontrast_palette(nrow(props$data))
-p <- ggplot(plot_data, aes(fill = taxon, y = relative_abundance, x = sample_index)) +
-  geom_bar(position = "stack", stat = "identity") +
-  scale_fill_manual(values = palette)
-p
+# # Strip down to taxa
+# tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
 
-saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")
+# rownames(props$data) <- c(tax_labels, "assorted low abundance")
+# props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
+# plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
+# plot_data$taxon <- as.factor(plot_data$taxon)
+# palette <- generate_highcontrast_palette(nrow(props$data))
+# p <- ggplot(plot_data, aes(fill = taxon, y = relative_abundance, x = sample_index)) +
+#   geom_bar(position = "stack", stat = "identity") +
+#   scale_fill_manual(values = palette)
+# p
+
+# saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")
 
 # -------------------------------------------------------------------------------------------------
 #   Fit model to 10 subjects with 5 samples (test)
 # -------------------------------------------------------------------------------------------------
 
-processed_data <- readRDS("processed_data.rds")
-counts <- processed_data$counts
-tax <- processed_data$tax
-metadata <- processed_data$metadata
+# processed_data <- readRDS("processed_data.rds")
+# counts <- processed_data$counts
+# tax <- processed_data$tax
+# metadata <- processed_data$metadata
 
 subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies == 5)])
@@ -211,27 +212,27 @@ for(i in 1:fit$iter) {
   Sigma_corr[,,i] <- cov2cor(Sigma_corr[,,i])
 }
 
-# Get mean posterior predictions for a few parameters
-mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
-mean_Eta <- apply(fit.clr$Eta, c(1,2), mean)
-mean_Lambda <- apply(fit.clr$Lambda, c(1,2), mean)
+# # Get mean posterior predictions for a few parameters
+# mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
+# mean_Eta <- apply(fit.clr$Eta, c(1,2), mean)
+# mean_Lambda <- apply(fit.clr$Lambda, c(1,2), mean)
 
-# Find (and visualize) strong correlators
-mean_Sigma[upper.tri(mean_Sigma, diag = TRUE)] <- NA
-pairs <- which(mean_Sigma > 0.75, arr.ind = TRUE)
-image(mean_Sigma)
+# # Find (and visualize) strong correlators
+# mean_Sigma[upper.tri(mean_Sigma, diag = TRUE)] <- NA
+# pairs <- which(mean_Sigma > 0.75, arr.ind = TRUE)
+# image(mean_Sigma)
 
-# Sample a pair of correlated CLR taxa
-sample_row <- sample(1:nrow(pairs), size = 1)
-idx1 <- pairs[sample_row,1]
-idx2 <- pairs[sample_row,2]
+# # Sample a pair of correlated CLR taxa
+# sample_row <- sample(1:nrow(pairs), size = 1)
+# idx1 <- pairs[sample_row,1]
+# idx2 <- pairs[sample_row,2]
 
-# Visualize the (apparently correlated) residuals
-set1 <- mean_Eta[idx1,] - mean_Lambda[idx1,]
-set2 <- mean_Eta[idx2,] - mean_Lambda[idx2,]
-plot(set1, set2)
-cor(set1, set2)
-cat("Pair:",idx1,"x",idx2,"\n")
+# # Visualize the (apparently correlated) residuals
+# set1 <- mean_Eta[idx1,] - mean_Lambda[idx1,]
+# set2 <- mean_Eta[idx2,] - mean_Lambda[idx2,]
+# plot(set1, set2)
+# cor(set1, set2)
+# cat("Pair:",idx1,"x",idx2,"\n")
 
 # -------------------------------------------------------------------------------------------------
 #   FILTER TO NON-ZERO-SPANNING POSTERIOR INTERVALS
@@ -274,6 +275,7 @@ head(results)
 #   TO DO
 # -------------------------------------------------------------------------------------------------
 
+# (0) Fix issue with double NA's in taxonomy (after re-closing)
 # (1) Presence-absence across subjects seems to drive correlation; scale to lots of subjects
 # (2) Prior choices OK?
 # (3) Fit across many subjects and build "rug" plot
