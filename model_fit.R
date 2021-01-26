@@ -24,6 +24,30 @@ get_cohort_samples <- function(cohort = "OB") {
   return(list(cohort = cohort, counts = cohort_counts, subjects = ind_ids, visits = visits))
 }
 
+generate_highcontrast_palette <- function(S) {
+  getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
+  sample(getPalette(S))
+}
+
+get_tax_label <- function(taxon_idx, tax_map) {
+  tax_pieces <- tax_map[taxon_idx,]
+  level_idx <- max(which(!is.na(tax_pieces)))
+  paste0(names(tax_pieces[level_idx]), " ", tax_pieces[level_idx])
+}
+
+# `data` is presumed to be taxa x samples
+collapse_below_minimum <- function(data, tax_map, threshold) {
+  if(threshold < 1 & max(colSums(data)) > 1) {
+    # Convert to proportions if that seems appropriate
+    data <- apply(data, 2, function(x) x/sum(x))
+  }
+  retain_taxa <- apply(data, 1, max) >= threshold
+  data <- rbind(data[retain_taxa,], colSums(data[!retain_taxa,]))
+  tax_map <- tax_map[retain_taxa,]
+  tax_map <- rbind(tax_map, NA)
+  return(list(data = data, tax = tax_map))
+}
+
 # -------------------------------------------------------------------------------------------------
 #   Parse data
 # -------------------------------------------------------------------------------------------------
@@ -38,53 +62,121 @@ rownames(tax) <- NULL # kill the huge sequence labels
 #   Filter
 # -------------------------------------------------------------------------------------------------
 
-# Filter to cohorts we care about: OB and HWC
+# Filter to cohort we care about: OB
 
-retain_samples <- metadata[metadata$group %in% c("OB", "HWC"),]$sample_id
+retain_samples <- metadata[metadata$group == "OB",]$sample_id
 counts <- counts[rownames(counts) %in% retain_samples,]
 metadata <- metadata[metadata$sample_id %in% retain_samples,]
+colnames(counts) <- NULL
 
 cat("Starting with",nrow(counts),"samples x",ncol(counts),"taxa\n")
 
-# Collapse taxa below a minimum relative abundance to an "other" category
+# (1) Remove all-zero taxa (almost 1/4)
+present_taxa <- which(colSums(counts) > 0)
+counts <- counts[,present_taxa]
+tax <- tax[present_taxa,]
 
-props <- t(apply(counts, 1, function(x) x/sum(x)))
-max_relative_abundance <- apply(props, 2, max)
-retain_taxa <- max_relative_abundance >= 0.05
+# Show percent taxa missing each taxonomic label
+# na_tax <- is.na(tax)
+# names(na_tax) <- names(tax)
+# apply(na_tax, 2, function(x) sum(x) / nrow(na_tax))
+
+# (2) Collapse to highest common taxonomic level
+agglomerated_counts <- NULL
+for(tax_level in 1:6) {
+  cat("Agglomerating at tax level:",colnames(tax)[tax_level],"\n")
+  counts_subset <- as.data.frame(cbind(tax, t(counts)))
+  counts_subset <- counts_subset[which(!is.na(counts_subset[,tax_level]) & is.na(counts_subset[,tax_level+1])),]
+  copy_long <- pivot_longer(counts_subset,
+                            !c("domain", "phylum", "class", "order", "family", "genus"),
+                            names_to = "sample",
+                            values_to = "count")
+  if(nrow(copy_long) > 0) {
+    copy_long$count <- as.numeric(copy_long$count)
+    result <- copy_long %>%
+      group_by(domain, phylum, class, order, family, genus, sample) %>%
+      summarize(total_counts = sum(count), .groups = 'drop')
+    counts_subset <- as.data.frame(pivot_wider(result, names_from = "sample", values_from = "total_counts"))
+    if(is.null(agglomerated_counts)) {
+      agglomerated_counts <- counts_subset
+    } else {
+      agglomerated_counts <- rbind(agglomerated_counts, counts_subset)
+    }
+  }
+}
+
+# The pivots will have disordered the samples; get them back in the original (subject x visit) order
+orig_sample_order <- rownames(counts)
+new_tax <- agglomerated_counts[,1:6]
+new_counts <- agglomerated_counts[,7:ncol(agglomerated_counts)]
+new_counts <- new_counts[,orig_sample_order]
+
+counts <- new_counts
+tax <- new_tax
+# Note: `counts` and `tax` now have taxa as rows
+
+# (3) Count features with max abundance < 1%
+props <- apply(counts, 2, function(x) x/sum(x))
+max_relative_abundance <- apply(props, 1, max)
+retain_taxa <- max_relative_abundance >= 0.01
 cat(paste0("Retaining ", round((sum(retain_taxa) / length(max_relative_abundance))*100, 1),
            " percent of taxa (",sum(retain_taxa),")\n"))
 
-retained_total <- sum(counts[,retain_taxa])
+retained_total <- sum(counts[retain_taxa,])
 total <- sum(counts)
 cat("Retained taxa account for",round((retained_total / total)*100, 1),"percent of total counts\n")
 
-counts_collapsed <- cbind(counts[,retain_taxa], rowSums(counts[,!retain_taxa]))
+counts_collapsed <- rbind(counts[retain_taxa,], rowSums(counts[!retain_taxa,]))
 counts <- counts_collapsed
-cat("Collapsed to",nrow(counts_collapsed),"samples x",ncol(counts_collapsed),"taxa\n")
+rownames(counts) <- NULL
+cat("Collapsed to",nrow(counts),"taxa x",ncol(counts),"samples\n")
 tax <- tax[retain_taxa,]
 tax <- rbind(tax, NA)
+rownames(tax) <- NULL
+
+# Visualize these compositions quickly
+# Pick a subset of the data that corresponds to visits 1-5 from subject 192
+#   metadata[metadata$sample_id %in% colnames(counts)[15:19],c("ind_id","visit")]
+counts_subset <- counts[,15:19]
+
+props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
+
+# Strip down to taxa
+tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
+rownames(props$data) <- c(tax_labels, "assorted low abundance")
+props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
+plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
+plot_data$taxon <- as.factor(plot_data$taxon)
+palette <- generate_highcontrast_palette(nrow(props$data))
+p <- ggplot(plot_data, aes(fill = taxon, y = relative_abundance, x = sample_index)) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_fill_manual(values = palette)
+p
+
+saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")
 
 # -------------------------------------------------------------------------------------------------
 #   Fit model to 10 subjects with 5 samples (test)
 # -------------------------------------------------------------------------------------------------
 
-data_OB <- get_cohort_samples(cohort = "OB")
+processed_data <- readRDS("processed_data.rds")
+counts <- processed_data$counts
+tax <- processed_data$tax
+metadata <- processed_data$metadata
 
-subject_tallies <- table(data_OB$subjects)
+subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies == 5)])
 subject_labels <- c()
 Y <- NULL
-for(subject in subjects[1:10]) {
-  subject_counts <- data_OB$counts[which(data_OB$subjects == subject),]
-  if(is.null(subject_counts)) {
+for(subject in subjects[1:5]) {
+  subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
+  if(is.null(Y)) {
     Y <- subject_counts
   } else {
-    Y <- rbind(Y, subject_counts)
+    Y <- cbind(Y, subject_counts)
   }
-  subject_labels <- c(subject_labels, rep(subject, nrow(subject_counts)))
+  subject_labels <- c(subject_labels, rep(subject, ncol(subject_counts)))
 }
-Y <- t(Y) # D x N
-rownames(Y) <- NULL
 
 # Build design matrix
 subject_labels <- as.factor(subject_labels)
@@ -104,8 +196,10 @@ Theta <- matrix(0, nrow(Y)-1, nrow(X))
 Gamma <- diag(nrow(X))
 
 # Fit model and convert to CLR
-fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi) # takes about 5 sec. at 116 taxa x 15 samples
+fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi) # takes about 5 sec. at 116 taxa x 15 samples
 fit.clr <- to_clr(fit)
+
+saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model.rds")
 
 # -------------------------------------------------------------------------------------------------
 #   SANITY CHECK #1 - Do strong correlators seem plausible?
@@ -180,12 +274,9 @@ head(results)
 #   TO DO
 # -------------------------------------------------------------------------------------------------
 
-# (1) Filter based on OB cohort only; we're not interested in HWC samples here
-# (2) Prior choices?
-# (3) With a few subjects the "rare" group has high correlation because of total absense in some
-#       subjects and relatively high abundance in others. If this doens't disappear with more
-#       subjects, this probably needs a re-think.
-# (4) Fit across many subjects and build "rug" plot
+# (1) Presence-absence across subjects seems to drive correlation; scale to lots of subjects
+# (2) Prior choices OK?
+# (3) Fit across many subjects and build "rug" plot
 
 
 
