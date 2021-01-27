@@ -134,6 +134,9 @@ tax <- tax[retain_taxa,]
 tax <- rbind(tax, NA)
 rownames(tax) <- NULL
 
+saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "temp.rds")
+quit()
+
 # Visualize these compositions quickly
 # Pick a subset of the data that corresponds to visits 1-5 from subject 192
 #   metadata[metadata$sample_id %in% colnames(counts)[15:19],c("ind_id","visit")]
@@ -169,7 +172,8 @@ subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies == 5)])
 subject_labels <- c()
 Y <- NULL
-for(subject in subjects[1:5]) {
+for(subject in subjects) {
+# for(subject in subjects[1:5]) {
   subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
   if(is.null(Y)) {
     Y <- subject_counts
@@ -200,7 +204,7 @@ Gamma <- diag(nrow(X))
 fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi) # takes about 5 sec. at 116 taxa x 15 samples
 fit.clr <- to_clr(fit)
 
-saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model.rds")
+saveRDS(list(fit = fit, fit.clr = fit.clr, subjects = subject_labels), file = "fitted_model.rds")
 
 # -------------------------------------------------------------------------------------------------
 #   SANITY CHECK #1 - Do strong correlators seem plausible?
