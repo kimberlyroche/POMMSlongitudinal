@@ -230,7 +230,8 @@ subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies == 5)])
 subject_labels <- c()
 Y <- NULL
-for(subject in subjects[1:5]) {
+for(subject in subjects) {
+# for(subject in subjects[1:5]) {
   subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
   if(is.null(Y)) {
     Y <- subject_counts
