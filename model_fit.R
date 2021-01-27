@@ -36,15 +36,17 @@ get_tax_label <- function(taxon_idx, tax_map) {
 }
 
 # `data` is presumed to be taxa x samples
+# The last row of tax is assumed to be an "other" category (all <NA>)
 collapse_below_minimum <- function(data, tax_map, threshold) {
   if(threshold < 1 & max(colSums(data)) > 1) {
     # Convert to proportions if that seems appropriate
     data <- apply(data, 2, function(x) x/sum(x))
   }
   retain_taxa <- apply(data, 1, max) >= threshold
+  retain_taxa[length(retain_taxa)] <- FALSE
   data <- rbind(data[retain_taxa,], colSums(data[!retain_taxa,]))
+  retain_taxa[length(retain_taxa)] <- TRUE
   tax_map <- tax_map[retain_taxa,]
-  tax_map <- rbind(tax_map, NA)
   return(list(data = data, tax = tax_map))
 }
 
@@ -76,10 +78,35 @@ present_taxa <- which(colSums(counts) > 0)
 counts <- counts[,present_taxa]
 tax <- tax[present_taxa,]
 
-# Show percent taxa missing each taxonomic label
-# na_tax <- is.na(tax)
-# names(na_tax) <- names(tax)
-# apply(na_tax, 2, function(x) sum(x) / nrow(na_tax))
+# There's a phenomenon here where some intermediate taxonomic levels are missing
+# Replace these interstitial <NA>s with "(missing)" so we can differentiate them
+# (Basically the agglomeration I'm doing below truncates erroneously on these and
+# causes problems)
+
+# This will transform
+#   Bacteria Firmicutes Clostridia Peptostreptococcales-Tissierellales <NA> Finegoldia
+# into
+#   Bacteria Firmicutes Clostridia Peptostreptococcales-Tissierellales (Missing) Finegoldia
+
+for(i in 1:nrow(tax)) {
+  idx <- which(is.na(tax[i,1:6]))
+  if(length(idx) > 0) {
+    first_na_idx <- min(idx)
+    if(sum(is.na(tax[i,first_na_idx:6])) != length(first_na_idx:6)) {
+      # Replace interstitial <NA>s with a string
+      label_encountered <- FALSE
+      for(j in 6:1) {
+        if(!is.na(tax[i,j])) {
+          label_encountered <- TRUE
+        } else {
+          if(label_encountered) {
+            tax[i,j] <- "(Missing)"
+          }
+        }
+      }
+    }
+  } # else fully defined
+}
 
 # (2) Collapse to highest common taxonomic level
 agglomerated_counts <- NULL
@@ -115,35 +142,74 @@ counts <- new_counts
 tax <- new_tax
 # Note: `counts` and `tax` now have taxa as rows
 
-# (3) Count features with max abundance < 1%
+# (3) Remove taxa that aren't present (non-zero) in at least one of every subject's samples
+#     We'll put this into an "other" row
+retain_taxa <- c()
+n_subjects <- length(unique(metadata$ind_id))
+for(tax_idx in 1:nrow(counts)) {
+  abundance <- unlist(counts[tax_idx,])
+  names(abundance) <- metadata$ind_id
+  d <- data.frame(count = unname(abundance), subject = metadata$ind_id)
+  subject_no_observation <- d %>%
+    group_by(subject) %>%
+    summarize(total_observations = sum(count), .groups = 'drop') %>%
+    filter(total_observations == 0) %>%
+    nrow()
+  if(subject_no_observation < n_subjects / 2) {
+    retain_taxa <- c(retain_taxa, TRUE)
+  } else {
+    retain_taxa <- c(retain_taxa, FALSE)
+  }
+}
+
+# Roll the rare-across-subjects taxa into the "other" category (last row)
+new_counts <- counts[retain_taxa,]
+new_counts <- rbind(new_counts, rowSums(counts[!retain_taxa,]))
+new_tax <- tax[retain_taxa,]
+new_tax <- rbind(new_tax, NA)
+
+counts <- new_counts
+tax <- new_tax
+
+# (4) Count features with max abundance < 1%
 props <- apply(counts, 2, function(x) x/sum(x))
 max_relative_abundance <- apply(props, 1, max)
-retain_taxa <- max_relative_abundance >= 0.01
+retain_taxa <- max_relative_abundance >= 0.005
 cat(paste0("Retaining ", round((sum(retain_taxa) / length(max_relative_abundance))*100, 1),
            " percent of taxa (",sum(retain_taxa),")\n"))
 
-retained_total <- sum(counts[retain_taxa,])
+# Mark "other" as being not retained, so that we can bundle it and the rare guys together
+retain_taxa[length(retain_taxa)] <- FALSE
+new_counts <- rbind(counts[retain_taxa,], rowSums(counts[!retain_taxa,]))
+retain_taxa[length(retain_taxa)] <- TRUE
+new_tax <- tax[retain_taxa,]
+
+counts <- new_counts
+tax <- new_tax
+
+# Clean up
+rownames(counts) <- NULL
+rownames(tax) <- NULL
+
+# Report totals
+retained_total <- sum(counts[1:(nrow(counts)-1),])
 total <- sum(counts)
 cat("Retained taxa account for",round((retained_total / total)*100, 1),"percent of total counts\n")
 
-counts_collapsed <- rbind(counts[retain_taxa,], rowSums(counts[!retain_taxa,]))
-counts <- counts_collapsed
-rownames(counts) <- NULL
-cat("Collapsed to",nrow(counts),"taxa x",ncol(counts),"samples\n")
-tax <- tax[retain_taxa,]
-tax <- rbind(tax, NA)
-rownames(tax) <- NULL
+# Check that all taxa are unique at this point
+# shortnames <- apply(tax, 1, function(x) paste(x, collapse = ""))
+# which(table(shortnames) > 1)
 
 # Visualize these compositions quickly
 # Pick a subset of the data that corresponds to visits 1-5 from subject 192
 #   metadata[metadata$sample_id %in% colnames(counts)[15:19],c("ind_id","visit")]
 # counts_subset <- counts[,15:19]
-
+# 
 # props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
-
+# 
 # # Strip down to taxa
 # tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
-
+# 
 # rownames(props$data) <- c(tax_labels, "assorted low abundance")
 # props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
 # plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
@@ -154,16 +220,11 @@ rownames(tax) <- NULL
 #   scale_fill_manual(values = palette)
 # p
 
-# saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")
+saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")
 
 # -------------------------------------------------------------------------------------------------
 #   Fit model to 10 subjects with 5 samples (test)
 # -------------------------------------------------------------------------------------------------
-
-# processed_data <- readRDS("processed_data.rds")
-# counts <- processed_data$counts
-# tax <- processed_data$tax
-# metadata <- processed_data$metadata
 
 subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies == 5)])
@@ -197,14 +258,23 @@ Theta <- matrix(0, nrow(Y)-1, nrow(X))
 Gamma <- diag(nrow(X))
 
 # Fit model and convert to CLR
+cat("Fitting model...\n")
 fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi) # takes about 5 sec. at 116 taxa x 15 samples
+cat("Model fit!\n")
 fit.clr <- to_clr(fit)
 
 saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model.rds")
+quit()
 
 # -------------------------------------------------------------------------------------------------
-#   SANITY CHECK #1 - Do strong correlators seem plausible?
+#   RESULTS: TAKE A LOOK AT STRONG CORRELATORS
 # -------------------------------------------------------------------------------------------------
+
+fit_obj <- readRDS("fitted_model.rds")
+fit <- fit_obj$fit
+fit.clr <- fit_obj$fit.clr
+subject_labels <- fit_obj$subjects
+rm(fit_obj)
 
 # Scale Sigma to correlation
 Sigma_corr <- fit.clr$Sigma
@@ -212,27 +282,11 @@ for(i in 1:fit$iter) {
   Sigma_corr[,,i] <- cov2cor(Sigma_corr[,,i])
 }
 
-# # Get mean posterior predictions for a few parameters
-# mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
-# mean_Eta <- apply(fit.clr$Eta, c(1,2), mean)
-# mean_Lambda <- apply(fit.clr$Lambda, c(1,2), mean)
+# Get mean posterior predictions for a few parameters
+mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
+mean_Eta <- apply(fit.clr$Eta, c(1,2), mean)
 
-# # Find (and visualize) strong correlators
-# mean_Sigma[upper.tri(mean_Sigma, diag = TRUE)] <- NA
-# pairs <- which(mean_Sigma > 0.75, arr.ind = TRUE)
-# image(mean_Sigma)
-
-# # Sample a pair of correlated CLR taxa
-# sample_row <- sample(1:nrow(pairs), size = 1)
-# idx1 <- pairs[sample_row,1]
-# idx2 <- pairs[sample_row,2]
-
-# # Visualize the (apparently correlated) residuals
-# set1 <- mean_Eta[idx1,] - mean_Lambda[idx1,]
-# set2 <- mean_Eta[idx2,] - mean_Lambda[idx2,]
-# plot(set1, set2)
-# cor(set1, set2)
-# cat("Pair:",idx1,"x",idx2,"\n")
+image(mean_Sigma) # TBD: replace with decent ggplot
 
 # -------------------------------------------------------------------------------------------------
 #   FILTER TO NON-ZERO-SPANNING POSTERIOR INTERVALS
@@ -266,19 +320,8 @@ results <- as.data.frame(pairs_long %>%
                            group_by(pair) %>%
                            summarize(q1 = quantile(correlation, probs = c(0.025)),
                                      q2 = quantile(correlation, probs = c(0.975)),
-                                     matched_sign = sign(q1) == sign(q2)) %>%
+                                     matched_sign = sign(q1) == sign(q2), .groups = 'drop') %>%
                            filter(matched_sign)) %>%
                            select(pair)
 head(results)
-
-# -------------------------------------------------------------------------------------------------
-#   TO DO
-# -------------------------------------------------------------------------------------------------
-
-# (0) Fix issue with double NA's in taxonomy (after re-closing)
-# (1) Presence-absence across subjects seems to drive correlation; scale to lots of subjects
-# (2) Prior choices OK?
-# (3) Fit across many subjects and build "rug" plot
-
-
 
