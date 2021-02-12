@@ -201,21 +201,22 @@ cat("Retained taxa account for",round((retained_total / total)*100, 1),"percent 
 # Visualize these compositions quickly
 # Pick a subset of the data that corresponds to visits 1-5 from subject 192
 #   metadata[metadata$sample_id %in% colnames(counts)[15:19],c("ind_id","visit")]
-# counts_subset <- counts[,15:19]
-# 
-# props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
-# 
-# # Strip down to taxa
-# tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
-# 
-# rownames(props$data) <- c(tax_labels, "assorted low abundance")
-# props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
-# plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
-# plot_data$taxon <- as.factor(plot_data$taxon)
-# palette <- generate_highcontrast_palette(nrow(props$data))
-# p <- ggplot(plot_data, aes(fill = taxon, y = relative_abundance, x = sample_index)) +
-#   geom_bar(position = "stack", stat = "identity") +
-#   scale_fill_manual(values = palette)
-# p
+
+sample_no <- table(metadata$ind_id)
+select_subj <- sample(names(sample_no[sample_no >= 4]), size = 1)
+counts_subset <- counts[,colnames(counts) %in% metadata[metadata$ind_id == select_subj,]$sample_id]
+props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
+palette <- generate_highcontrast_palette(nrow(props$data))
+# Strip down to taxa
+tax_labels <- unname(sapply(1:(nrow(props$data)-1), function(x) get_tax_label(x, props$tax)))
+rownames(props$data) <- c(tax_labels, "assorted low abundance")
+props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
+plot_data <- pivot_longer(as.data.frame(t(props$data)), !sample_index, names_to = "taxon", values_to = "relative_abundance")
+plot_data$taxon <- as.factor(plot_data$taxon)
+p <- ggplot(plot_data, aes(fill = taxon, y = relative_abundance, x = sample_index)) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_fill_manual(values = palette)
+show(p)
+ggsave(paste0("subject_series_",s_idx,".png"), p, units = "in", dpi = 100, height = 6, width = 6)
 
 saveRDS(list(counts = counts, tax = tax, metadata = metadata), file = "processed_data.rds")

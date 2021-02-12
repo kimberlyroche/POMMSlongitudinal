@@ -1,4 +1,5 @@
 library(fido)
+library(driver)
 library(tidyverse)
 
 # -------------------------------------------------------------------------------------------------
@@ -10,6 +11,7 @@ fit_model <- function(subject, counts, metadata) {
   # Treat samples as independent for now
   
   Y <- counts[,colnames(counts) %in% subject_samples]
+  Y <- as.matrix(Y)
   
   # Build design matrix
   X <- matrix(1, 1, ncol(Y)) # intercept-only model
@@ -25,29 +27,31 @@ fit_model <- function(subject, counts, metadata) {
   Omega <- diag(nrow(Y))
   G <- cbind(diag(nrow(Y)-1), -1)
   Xi <- (upsilon-nrow(Y))*G%*%Omega%*%t(G)
-  Theta <- matrix(0, nrow(Y)-1, nrow(X))
+  alr_Y <- alr_array(Y + 1, parts = 1)
+  Theta <- matrix(rowMeans(alr_Y), nrow(Y)-1, nrow(X))
+  # Theta <- matrix(0, nrow(Y)-1, nrow(X))
   Gamma <- diag(nrow(X))
   
   # Fit model and convert to CLR
   cat("Fitting model...\n")
-  fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi) # takes about 5 sec. at 116 taxa x 15 samples
+  fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi, n_samples = 500) # takes about 5 sec. at 116 taxa x 15 samples
   cat("Model fit!\n")
-  fit.clr <- to_clr(fit)
+  fit.clr <- fido::to_clr(fit)
   
   # Scale Sigma to correlation
   Sigma_corr <- fit.clr$Sigma
-  for(i in 1:fit$iter) {
+  for(i in 1:fit.clr$iter) {
     Sigma_corr[,,i] <- cov2cor(Sigma_corr[,,i])
   }
   
   # Get mean posterior predictions for a few parameters
   mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
-  
+
   # -------------------------------------------------------------------------------------------------
   #   What to do about tremendous posterior uncertainty?
   # -------------------------------------------------------------------------------------------------
   
-  return(list(mean_Sigma = mean_Sigma, sample_Sigma = Sigma_corr[,,1]))
+  return(list(fit = fit.clr, mean_Sigma = mean_Sigma, sample_Sigma = Sigma_corr[,,1]))
 }
 
 # Vectorize unique elements of covariance matrix
@@ -77,17 +81,20 @@ rm(data_obj)
 sample_ids <- colnames(counts)
 subjects <- metadata[metadata$sample_id %in% sample_ids,]$ind_id
 
-full_sample_subj <- which(table(subjects) == 5)
+full_sample_subj <- which(table(subjects) > 4)
 
 pairs <- NULL
 rug_consensus <- NULL
 rug_sampled <- NULL
-for(s_idx in 1:10) {
+fits <- list()
+for(s_idx in 1:length(full_sample_subj)) {
+# for(s_idx in 1:5) {
   cat("Evaluating subject",s_idx,"\n")
   subject <- names(full_sample_subj)[s_idx]
-  Sigmas <- fit_model(subject, counts, metadata)
-  mean_Sigma <- Sigmas$mean_Sigma
-  sample_Sigma <- Sigmas$sample_Sigma
+  res <- fit_model(subject, counts, metadata)
+  fits[[s_idx]] <- res$fit
+  mean_Sigma <- res$mean_Sigma
+  sample_Sigma <- res$sample_Sigma
   if(is.null(pairs)) {
     res <- vectorize_Sigma(mean_Sigma, labels = TRUE)
     pairs <- res$pairs
@@ -113,9 +120,11 @@ visualize_rug <- function(rug, row_ordering = NULL, column_ordering = NULL) {
     column_ordering <- clustering.interactions$order
   }
   # Reorder all
+  # row_ordering <- 1:nrow(rug)
+  # column_ordering <- 1:ncol(rug)
+  
   rug.reordered <- rug[row_ordering,]
   rug.reordered <- rug.reordered[,column_ordering]
-  pairs.reordered <- pairs[column_ordering]
   
   rug.reordered <- as.data.frame(cbind(1:nrow(rug.reordered), rug.reordered))
   colnames(rug.reordered) <- c("host", 1:(ncol(rug.reordered)-1))
@@ -137,13 +146,9 @@ visualize_rug <- function(rug, row_ordering = NULL, column_ordering = NULL) {
 
 rug_obj <- visualize_rug(rug_consensus, row_ordering = NULL, column_ordering = NULL)
 show(rug_obj$plot)
+ggsave("rug_v1.png", plot = rug_obj$plot, units = "in", dpi = 100, height = 8, width = 12)
 
-rug_obj <- visualize_rug(rug_sampled, row_ordering = rug_obj$row_ordering, column_ordering = rug_obj$column_ordering)
-show(rug_obj$plot)
-
-
-
-
-
-
+rug_obj_sampled <- visualize_rug(rug_sampled, row_ordering = rug_obj$row_ordering, column_ordering = rug_obj$column_ordering)
+show(rug_obj_sampled$plot)
+ggsave("rug_v2.png", plot = rug_obj_sampled$plot, units = "in", dpi = 100, height = 8, width = 12)
 
