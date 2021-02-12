@@ -106,10 +106,24 @@ Gamma <- diag(nrow(X))
 # Fit model and convert to CLR
 cat("Fitting model...\n")
 fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi, n_samples = 500) # takes about 5 sec. at 116 taxa x 15 samples
+# Alternative optimization parameters
+# Note: none of these seem to allow full posterior optimization; need to fiddle
+# fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi, n_samples = 500,
+#               b2 = 0.98, step_size = 0.002, eps_f = 1e-11, eps_g = 1e-05,
+#               max_iter = 10000L, optim_method = "adam")
+
 cat("Model fit!\n")
 fit.clr <- to_clr(fit)
 
-saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model.rds")
+# 4 cores -- all failed
+#  fitted_model: pibble w/ LBFGS
+#  fitted_model_2: pibble w/ Adam (b = 0.99, step_size = 0.004)
+#  fitted_model_3: pibble w/ Adam (as above) and larger covariance Gamma (to accommodate heterogeneity across users?)
+# 1 core
+#  fitted_model_4: pibble w/ Adam (b = 0.98, step_size = 0.002)
+#   job 24319681
+
+saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model_4.rds")
 quit()
 
 # -------------------------------------------------------------------------------------------------
@@ -137,13 +151,14 @@ for(i in 1:fit$iter) {
 # Get mean posterior predictions for a few parameters
 mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
 
+# Sigma visualization
 temp <- mean_Sigma
-# temp[upper.tri(temp, diag = TRUE)] <- NA
+temp[upper.tri(temp, diag = TRUE)] <- NA
 temp <- as.data.frame(cbind(1:nrow(temp), temp))
 colnames(temp) <- c("taxon1", 1:nrow(temp))
 temp <- pivot_longer(temp, !taxon1, names_to = "taxon2", values_to = "correlation")
 temp$taxon2 <- as.numeric(temp$taxon2)
-# temp <- temp[complete.cases(temp),]
+temp <- temp[complete.cases(temp),]
 
 ggplot(temp, aes(x = taxon1, y = taxon2, fill = correlation)) +
   geom_tile() +
