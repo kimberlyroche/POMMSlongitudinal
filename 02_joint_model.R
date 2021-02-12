@@ -4,6 +4,8 @@ library(RColorBrewer)
 library(driver)
 library(fido)
 
+# setwd("C:/Users/kim/Documents/POMMSlongitudinal/")
+
 # -------------------------------------------------------------------------------------------------
 #   Functions
 # -------------------------------------------------------------------------------------------------
@@ -64,16 +66,40 @@ tax <- data_obj$tax
 metadata <- data_obj$metadata
 rm(data_obj)
 
+subject_tallies <- table(metadata$ind_id)
+subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
+
+# Pull demographic data
+vitals <- read.table("data/VE_PEDOB_R24_VITALS.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+# Calculate BMI from Ht (seemingly cm) and Wt (seemingly kg)
+vitals <- vitals %>%
+  filter(Timepoint == "R24 Baseline")
+
+bmis <- sapply(1:nrow(vitals), function(x) (vitals[x,]$Wt / (vitals[x,]$Ht^2)) * 1e4)
+names(bmis) <- vitals$Ind
+
+bmis <- bmis[which(names(bmis) %in% subjects)]
+bmis_scaled <- scale(log(bmis), center = TRUE, scale = TRUE)
+names(bmis_scaled) <- names(bmis)
+
+# Pull BMI and HOMA data
+met <- read.table("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.tsv", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+delta_BMI <- sapply(subjects, function(x) unname(met[met$IND == x,]$Delta_BMI_P95))
+names(delta_BMI) <- subjects
+
+# For now, impute the mean to missing values; we need to think carefully about this
+mean_delta <- mean(delta_BMI, na.rm = TRUE)
+delta_BMI[is.na(delta_BMI)] <- mean_delta
+
 # -------------------------------------------------------------------------------------------------
 #   Fit model to 10 subjects with 5 samples (test)
 # -------------------------------------------------------------------------------------------------
 
-subject_tallies <- table(metadata$ind_id)
-subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
 subject_labels <- c()
+bmi_covariate <- c()
 Y <- NULL
-for(subject in subjects) {
-# for(subject in subjects[1:5]) {
+# for(subject in subjects) {
+for(subject in subjects[1:10]) {
   subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
   if(is.null(Y)) {
     Y <- subject_counts
@@ -81,11 +107,13 @@ for(subject in subjects) {
     Y <- cbind(Y, subject_counts)
   }
   subject_labels <- c(subject_labels, rep(subject, ncol(subject_counts)))
+  bmi <- unname(delta_BMI[which(names(delta_BMI) == subject)])
+  bmi_covariate <- c(bmi_covariate, rep(bmi, ncol(subject_counts)))
 }
 
 # Build design matrix
 subject_labels <- as.factor(subject_labels)
-X <- t(model.matrix(~subject_labels))
+X <- t(model.matrix(~subject_labels + bmi_covariate))
 # X <- matrix(1, 1, ncol(Y)) # intercept-only model
 
 # Filter out taxa totally absent in this subset of subject samples
@@ -105,7 +133,7 @@ Gamma <- diag(nrow(X))
 
 # Fit model and convert to CLR
 cat("Fitting model...\n")
-fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi, n_samples = 500) # takes about 5 sec. at 116 taxa x 15 samples
+fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi, n_samples = 0, ret_mean = TRUE) # takes about 5 sec. at 116 taxa x 15 samples
 # Alternative optimization parameters
 # Note: none of these seem to allow full posterior optimization; need to fiddle
 # fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi, n_samples = 500,
@@ -115,15 +143,7 @@ fit <- pibble(as.matrix(Y), X, upsilon, Theta, Gamma, Xi, n_samples = 500) # tak
 cat("Model fit!\n")
 fit.clr <- to_clr(fit)
 
-# 4 cores -- all failed
-#  fitted_model: pibble w/ LBFGS
-#  fitted_model_2: pibble w/ Adam (b = 0.99, step_size = 0.004)
-#  fitted_model_3: pibble w/ Adam (as above) and larger covariance Gamma (to accommodate heterogeneity across users?)
-# 1 core
-#  fitted_model_4: pibble w/ Adam (b = 0.98, step_size = 0.002)
-#   job 24319681
-
-saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model_4.rds")
+saveRDS(list(fit = fit, fit.clr = fit.clr), file = "fitted_model.rds")
 quit()
 
 # -------------------------------------------------------------------------------------------------

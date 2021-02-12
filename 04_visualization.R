@@ -4,6 +4,12 @@ library(RColorBrewer)
 library(driver)
 library(fido)
 
+# --------------------------------------------------------------------------------------------------
+#   Note: This script has a lot of duplicate/deprecated code from other scripts. It needs
+#         a big cleanup! (2/12/2021)
+# --------------------------------------------------------------------------------------------------
+
+
 setwd("C:/Users/kim/Documents/POMMSlongitudinal/")
 
 # Pull per-group sample identifiers
@@ -37,7 +43,7 @@ plot_sampled_bars <- function(A, B = NULL, palette = NULL) {
     combined_counts <- A
   } else {
     sample_sz <- 10
-  # Subsample for combined counts (otherwise the plot is visually awful)
+    # Subsample for combined counts (otherwise the plot is visually awful)
     combined_counts <- rbind(A[sample(1:nrow(A), size = sample_sz),],
                              B[sample(1:nrow(B), size = sample_sz),])
   }
