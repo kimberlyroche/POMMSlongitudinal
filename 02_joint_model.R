@@ -164,13 +164,7 @@ quit()
 #   RESULTS: TAKE A LOOK AT STRONG CORRELATORS
 # -------------------------------------------------------------------------------------------------
 
-MAP_estimate <- TRUE
-if(MAP_estimate) {
-  fit_obj <- readRDS("fitted_model_2.rds")
-} else {
-  # Note: this output is erroneous; wrong input data!
-  fit_obj <- readRDS("fitted_model.rds")
-}
+fit_obj <- readRDS("fitted_model.rds")
 fit <- fit_obj$fit
 fit.clr <- fit_obj$fit.clr
 subject_labels <- fit_obj$subjects
