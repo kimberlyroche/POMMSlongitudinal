@@ -69,37 +69,47 @@ rm(data_obj)
 subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
 
-# Pull demographic data
-vitals <- read.table("data/VE_PEDOB_R24_VITALS.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
-# Calculate BMI from Ht (seemingly cm) and Wt (seemingly kg)
-vitals <- vitals %>%
-  filter(Timepoint == "R24 Baseline")
-
-bmis <- sapply(1:nrow(vitals), function(x) (vitals[x,]$Wt / (vitals[x,]$Ht^2)) * 1e4)
-names(bmis) <- vitals$Ind
-
-bmis <- bmis[which(names(bmis) %in% subjects)]
-bmis_scaled <- scale(log(bmis), center = TRUE, scale = TRUE)
-names(bmis_scaled) <- names(bmis)
-
 # Pull BMI and HOMA data
 met <- read.table("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.tsv", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
 delta_BMI <- sapply(subjects, function(x) unname(met[met$IND == x,]$Delta_BMI_P95))
 names(delta_BMI) <- subjects
+BMI_P95 <- sapply(subjects, function(x) unname(met[met$IND == x,]$BMI_P95))
+names(BMI_P95) <- subjects
+PC_HOMA_IR <- sapply(subjects, function(x) unname(met[met$IND == x,]$PC_HOMA_IR))
+names(PC_HOMA_IR) <- subjects
 
-# For now, impute the mean to missing values; we need to think carefully about this
-mean_delta <- mean(delta_BMI, na.rm = TRUE)
-delta_BMI[is.na(delta_BMI)] <- mean_delta
+selected_subjects <- subjects[which(!is.na(delta_BMI) & !is.na(BMI_P95) & !is.na(PC_HOMA_IR))]
+
+# For now, omit subjects with missing covariates
+# I'm not sure how we would otherwise impute them (etc.)
+
+# Center and scale these parameters
+# This bungles interpretation but I don't think we want to directly interpret the regression coefs
+
+delta_BMI <- delta_BMI[names(delta_BMI) %in% selected_subjects]
+saved_names <- names(delta_BMI)
+delta_BMI <- as.vector(scale(delta_BMI, center = FALSE, scale = TRUE))
+names(delta_BMI) <- saved_names
+BMI_P95 <- BMI_P95[names(BMI_P95) %in% selected_subjects]
+saved_names <- names(BMI_P95)
+BMI_P95 <- as.vector(scale(BMI_P95, center = FALSE, scale = TRUE))
+names(BMI_P95) <- saved_names
+PC_HOMA_IR <- PC_HOMA_IR[names(PC_HOMA_IR) %in% selected_subjects]
+saved_names <- names(PC_HOMA_IR)
+PC_HOMA_IR <- as.vector(scale(PC_HOMA_IR, center = FALSE, scale = TRUE))
+names(PC_HOMA_IR) <- saved_names
 
 # -------------------------------------------------------------------------------------------------
 #   Fit model to 10 subjects with 5 samples (test)
 # -------------------------------------------------------------------------------------------------
 
 subject_labels <- c()
-bmi_covariate <- c()
+bmi_covariate1 <- c()
+bmi_covariate2 <- c()
+ir_covariate <- c()
 Y <- NULL
-# for(subject in subjects) {
-for(subject in subjects[1:10]) {
+for(subject in selected_subjects) {
+# for(subject in selected_subjects[1:10]) {
   subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
   if(is.null(Y)) {
     Y <- subject_counts
@@ -107,13 +117,17 @@ for(subject in subjects[1:10]) {
     Y <- cbind(Y, subject_counts)
   }
   subject_labels <- c(subject_labels, rep(subject, ncol(subject_counts)))
-  bmi <- unname(delta_BMI[which(names(delta_BMI) == subject)])
-  bmi_covariate <- c(bmi_covariate, rep(bmi, ncol(subject_counts)))
+  baseline_scaled_bmi <- unname(BMI_P95[which(names(BMI_P95) == subject)])
+  bmi_covariate1 <- c(bmi_covariate1, rep(baseline_scaled_bmi, ncol(subject_counts)))
+  delta_scaled_bmi <- unname(delta_BMI[which(names(delta_BMI) == subject)])
+  bmi_covariate2 <- c(bmi_covariate2, rep(delta_scaled_bmi, ncol(subject_counts)))
+  delta_scaled_ir <- unname(PC_HOMA_IR[which(names(PC_HOMA_IR) == subject)])
+  ir_covariate <- c(ir_covariate, rep(delta_scaled_ir, ncol(subject_counts)))
 }
 
 # Build design matrix
 subject_labels <- as.factor(subject_labels)
-X <- t(model.matrix(~subject_labels + bmi_covariate))
+X <- t(model.matrix(~subject_labels + bmi_covariate1 + bmi_covariate2 + ir_covariate))
 # X <- matrix(1, 1, ncol(Y)) # intercept-only model
 
 # Filter out taxa totally absent in this subset of subject samples
