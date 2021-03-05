@@ -1,10 +1,12 @@
+# This script fits the (fido::pibble) model.
+
 library(fido)
 library(driver)
 library(tidyverse)
 
-# -------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #   Functions
-# -------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 fit_model <- function(subject, counts, metadata) {
   subject_samples <- metadata[metadata$ind_id == subject,]$sample_id
@@ -15,11 +17,6 @@ fit_model <- function(subject, counts, metadata) {
   
   # Build design matrix
   X <- matrix(1, 1, ncol(Y)) # intercept-only model
-  
-  # -------------------------------------------------------------------------------------------------
-  #   What to do about taxa absent in this individual?
-  #   Spike-in a random 1-count?
-  # -------------------------------------------------------------------------------------------------
   
   # Set priors a la
   # https://jsilve24.github.io/fido/articles/introduction-to-fido.html
@@ -34,7 +31,7 @@ fit_model <- function(subject, counts, metadata) {
   
   # Fit model and convert to CLR
   cat("Fitting model...\n")
-  fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi, n_samples = 500) # takes about 5 sec. at 116 taxa x 15 samples
+  fit <- pibble(Y, X, upsilon, Theta, Gamma, Xi, ret_mean = TRUE, n_samples = 0)
   cat("Model fit!\n")
   fit.clr <- fido::to_clr(fit)
   
@@ -47,15 +44,17 @@ fit_model <- function(subject, counts, metadata) {
   # Get mean posterior predictions for a few parameters
   mean_Sigma <- apply(Sigma_corr, c(1,2), mean)
 
-  # -------------------------------------------------------------------------------------------------
-  #   What to do about tremendous posterior uncertainty?
-  # -------------------------------------------------------------------------------------------------
+  # Note: Optimization over eta constantly fails to converge. This isn't obvs.
+  #   because of terrible choice of priors but I still haven't fixed it. Best
+  #   just to return MAP estimates for now.
   
-  return(list(fit = fit.clr, mean_Sigma = mean_Sigma, sample_Sigma = Sigma_corr[,,1]))
+  return(list(fit = fit.clr,
+              mean_Sigma = mean_Sigma,
+              sample_Sigma = Sigma_corr[,,1]))
 }
 
-# Vectorize unique elements of covariance matrix
-# If TRUE, labels returns a column-wise lookup of pairs
+# Vectorize unique elements of the covariance matrix. If `labels` is TRUE, the
+# function returns returns a column-wise lookup of taxon-taxon pairs.
 vectorize_Sigma <- function(Sigma, labels = FALSE) {
   combos <- combn(nrow(Sigma), m = 2)
   vec <- sapply(1:ncol(combos), function(i) {
@@ -68,9 +67,11 @@ vectorize_Sigma <- function(Sigma, labels = FALSE) {
   }
 }
 
-# -------------------------------------------------------------------------------------------------
-#   Parse data and fit model to the first 10 subjects with 5 visits
-# -------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#   Parse data and fit model
+# ------------------------------------------------------------------------------
+
+testing <- TRUE
 
 data_obj <- readRDS("processed_data.rds")
 counts <- data_obj$counts
