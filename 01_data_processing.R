@@ -202,8 +202,8 @@ palette <- generate_highcontrast_palette(nrow(props$data))
 # Strip down to taxa
 tax_labels <- unname(sapply(1:(nrow(props$data)-1),
                             function(x) {
-                              get_tax_label(x, props$tax
-                            })))
+                              get_tax_label(x, props$tax)
+                            }))
 rownames(props$data) <- c(tax_labels, "assorted low abundance")
 props$data <- rbind(sample_index = 1:ncol(props$data), props$data)
 plot_data <- pivot_longer(as.data.frame(t(props$data)),
@@ -217,7 +217,7 @@ p <- ggplot(plot_data, aes(fill = taxon,
   geom_bar(position = "stack", stat = "identity") +
   scale_fill_manual(values = palette)
 show(p)
-ggsave(file.path("output", "images", paste0("subject_series_",s_idx,".png")),
+ggsave(file.path("output", "images", paste0("subject_series.png")),
        p,
        units = "in",
        dpi = 100,

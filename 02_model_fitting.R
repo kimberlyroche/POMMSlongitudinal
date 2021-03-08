@@ -42,6 +42,8 @@ filter_CIs <- function(Sigma, correlators, threshold) {
 #   Parse data
 # ------------------------------------------------------------------------------
 
+filter_akkermansia <- TRUE
+
 data_obj <- readRDS(file.path("data", "processed_data.rds"))
 counts <- data_obj$counts
 tax <- data_obj$tax
@@ -50,6 +52,12 @@ rm(data_obj)
 
 subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
+
+akkermansia_list <- file.path("data", "akkermansia_subjects.rds")
+if(filter_akkermansia & file.exists(akkermansia_list)) {
+  akkermansia_subjects <- readRDS(akkermansia_list)
+  subjects <- intersect(subjects, akkermansia_subjects)
+}
 
 # ------------------------------------------------------------------------------
 #   Pull existing metabolic metadata
@@ -104,13 +112,13 @@ ggplot(data.frame(x = BMI_P95), aes(x = x)) +
 #   Fit model
 # ------------------------------------------------------------------------------
 
-testing <- TRUE
+testing <- FALSE
 
 if(!file.exists("fitted_model.rds")) {
 
   subjects_to_use <- selected_subjects
   if(testing) {
-    subjects_to_use <- selected_subjects[1:10]
+    subjects_to_use <- selected_subjects[1:20]
   }
   
   subject_labels <- c()
@@ -156,7 +164,7 @@ if(!file.exists("fitted_model.rds")) {
                 Theta,
                 Gamma,
                 Xi,
-                n_samples = 0,
+                n_samples = 1000,
                 ret_mean = TRUE)
   
   cat("Model fit!\n")
@@ -207,22 +215,38 @@ ggplot(temp, aes(x = taxon1, y = taxon2, fill = correlation)) +
 ggsave("Sigma.png", units = "in", dpi = 100, height = 6, width = 8)
 
 # ------------------------------------------------------------------------------
-#   Filter to non-zero-spanning posterior intervals
+#   Filter to non-zero-spanning posterior intervals (if you have a posterior!!!)
 # ------------------------------------------------------------------------------
 
 combos <- combn(1:nrow(mean_Sigma), m = 2)
 
-# Threshold to correlators with non-zero posterior 95% CIs
-non_zero <- sapply(1:ncol(combos), function(x) {
-  pair <- combos[,x]
-  sum(sign(quantile(Sigma_corr[pair[1],pair[2],], probs = c(0.025, 0.975))))
-})
+if(filter_akkermansia) {
+  akkermansia_idx <- which(tax[,6] == "Akkermansia")
+  ak_cols <- which(combos[1,] == akkermansia_idx | combos[2,] == akkermansia_idx)
+  net_sign <- sapply(1:ncol(combos), function(x) {
+    if(x %in% ak_cols) {
+      sum(sign(quantile(Sigma_corr[combos[1,x],combos[2,x],], probs = c(0.025, 0.975))))
+    } else {
+      0
+    }
+  })
+} else {
+  # Threshold to correlators with non-zero posterior 95% CIs
+  net_sign <- sapply(1:ncol(combos), function(x) {
+    pair <- combos[,x]
+    sum(sign(quantile(Sigma_corr[pair[1],pair[2],], probs = c(0.025, 0.975))))
+  })
+}
 
-negative_correlators <- which(non_zero < 0)
-positive_correlators <- which(non_zero > 0)
+negative_correlators <- which(net_sign < 0)
+positive_correlators <- which(net_sign > 0)
 
-df_neg <- filter_CIs(Sigma_corr, negative_correlators, threshold = -0.5)
-df_pos <- filter_CIs(Sigma_corr, positive_correlators, threshold = 0.5)
+threshold <- 0.5
+if(filter_akkermansia) {
+  threshold <- 0.2
+}
+df_neg <- filter_CIs(Sigma_corr, negative_correlators, threshold = -threshold)
+df_pos <- filter_CIs(Sigma_corr, positive_correlators, threshold = threshold)
 
 if(nrow(df_neg) > 0) {
   write.table(df_neg,
@@ -237,22 +261,22 @@ if(nrow(df_pos) > 0) {
 }
 
 # Diagnostic plotting of "hits"
-# df_plot <- df_neg # choose pairs to plot
-# for(i in 1:nrow(df_plot)) {
-#   x <- as.vector(fit.clr$Eta[df_plot[i,]$tag1,,1] - fit.clr$Lambda[df_plot[i,]$tag1,,1]%*%fit.clr$X)
-#   y <- as.vector(fit.clr$Eta[df_plot[i,]$tag2,,1] - fit.clr$Lambda[df_plot[i,]$tag2,,1]%*%fit.clr$X)
-#   tax1 <- get_tax_label(df_plot[i,]$tag1, tax)
-#   tax2 <- get_tax_label(df_plot[i,]$tag2, tax)
-#   p <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
-#     geom_point(size = 2) +
-#     theme_bw() +
-#     xlab(paste0("CLR(",tax1,")")) +
-#     ylab(paste0("CLR(",tax2,")"))
-#   show(p)
-#   ggsave(file.path("output", "images", paste0("check_",i,".png")),
-#          p,
-#          units = "in",
-#          dpi = 100,
-#          height = 4,
-#          width = 6)
-# }
+df_plot <- df_pos # choose pairs to plot
+for(i in 1:nrow(df_plot)) {
+  x <- as.vector(fit.clr$Eta[df_plot[i,]$tag1,,1] - fit.clr$Lambda[df_plot[i,]$tag1,,1]%*%fit.clr$X)
+  y <- as.vector(fit.clr$Eta[df_plot[i,]$tag2,,1] - fit.clr$Lambda[df_plot[i,]$tag2,,1]%*%fit.clr$X)
+  tax1 <- get_tax_label(df_plot[i,]$tag1, tax)
+  tax2 <- get_tax_label(df_plot[i,]$tag2, tax)
+  p <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
+    geom_point(size = 2) +
+    theme_bw() +
+    xlab(paste0("CLR(",tax1,")")) +
+    ylab(paste0("CLR(",tax2,")"))
+  show(p)
+  ggsave(file.path("output", "images", paste0("check_",i,".png")),
+         p,
+         units = "in",
+         dpi = 100,
+         height = 4,
+         width = 6)
+}

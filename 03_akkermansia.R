@@ -10,7 +10,7 @@ tax <- data_obj$tax
 metadata <- data_obj$metadata
 rm(data_obj)
 
-subjects <- unique(data$metadata$ind_id)
+subjects <- unique(metadata$ind_id)
 akkermansia_idx <- which(tax[,6] == "Akkermansia")
 
 # Filter to subjects with minimum Akkermansia relative abundance >= 0.1%
@@ -67,7 +67,7 @@ ggplot(akkermansia_range, aes(x = idx,
   ylab("relative abundance (Akkermansia)")
 
 # Use the mean cutoff; pop this data into a model!
-
+saveRDS(as.numeric(subjects[keep_subject_mean]), file = file.path("data", "akkermansia_subjects.rds"))
 
 
 
