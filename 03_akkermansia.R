@@ -1,4 +1,6 @@
-# This code ___.
+# This code identifies individuals with high* Akkermansia.
+
+source("00_functions.R")
 
 # ------------------------------------------------------------------------------
 #   Parse data

@@ -6,6 +6,8 @@ library(RColorBrewer)
 library(driver)
 library(fido)
 
+source("00_functions.R")
+
 # ------------------------------------------------------------------------------
 #   Functions
 # ------------------------------------------------------------------------------
@@ -118,7 +120,7 @@ if(!file.exists("fitted_model.rds")) {
 
   subjects_to_use <- selected_subjects
   if(testing) {
-    subjects_to_use <- selected_subjects[1:20]
+    subjects_to_use <- selected_subjects[1:10]
   }
   
   subject_labels <- c()
@@ -212,7 +214,7 @@ if(show_diag) {
 ggplot(temp, aes(x = taxon1, y = taxon2, fill = correlation)) +
   geom_tile() +
   scale_fill_gradient2(low = "darkblue", high = "darkred")
-ggsave("Sigma.png", units = "in", dpi = 100, height = 6, width = 8)
+ggsave(file.path("output", "Sigma.png"), units = "in", dpi = 100, height = 6, width = 8)
 
 # ------------------------------------------------------------------------------
 #   Filter to non-zero-spanning posterior intervals (if you have a posterior!!!)
