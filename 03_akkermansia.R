@@ -1,6 +1,6 @@
 # This code identifies individuals with high* Akkermansia.
 
-library(ggplot2)
+library(tidyverse)
 
 source("00_functions.R")
 
@@ -78,22 +78,16 @@ ggsave(file.path("output", "images", "Akkermansia_thresholds.png"),
        height = 5,
        width = 10)
 
-# Use the mean cutoff; pop this data into a model!
-saveRDS(as.numeric(subjects[keep_subject_mean]), file = file.path("data", "akkermansia_subjects.rds"))
+# Alternatively, filter to subjects with top 10 mean Akk. relative abundance
+top10 <- akkermansia_range %>%
+  filter(type == "mean") %>%
+  arrange(desc(value)) %>%
+  slice(1:10) %>%
+  select(subject)
 
+# Threshold 1
+# saveRDS(as.numeric(subjects[keep_subject_mean]), file = file.path("data", "akkermansia_subjects.rds"))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Threshold 2
+saveRDS(as.numeric(top10$subject), file = file.path("data", "akkermansia_subjects.rds"))
 

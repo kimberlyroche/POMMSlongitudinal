@@ -214,7 +214,7 @@ if(show_diag) {
 ggplot(temp, aes(x = taxon1, y = taxon2, fill = correlation)) +
   geom_tile() +
   scale_fill_gradient2(low = "darkblue", high = "darkred")
-ggsave(file.path("output", "Sigma.png"), units = "in", dpi = 100, height = 6, width = 8)
+ggsave(file.path("output", "images", "Sigma.png"), units = "in", dpi = 100, height = 6, width = 7.5)
 
 # ------------------------------------------------------------------------------
 #   Filter to non-zero-spanning posterior intervals (if you have a posterior!!!)
@@ -245,7 +245,7 @@ positive_correlators <- which(net_sign > 0)
 
 threshold <- 0.5
 if(filter_akkermansia) {
-  threshold <- 0.2
+  threshold <- 0.25
 }
 df_neg <- filter_CIs(Sigma_corr, negative_correlators, threshold = -threshold)
 df_pos <- filter_CIs(Sigma_corr, positive_correlators, threshold = threshold)

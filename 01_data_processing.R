@@ -198,6 +198,7 @@ cat("Retained taxa account for",
 sample_no <- table(metadata$ind_id)
 select_subj <- sample(names(sample_no[sample_no >= 4]), size = 1)
 select_subj <- "191"
+# Subject 121 has mean high Akkermansia and very large BMIP95 score (~263)
 counts_subset <- counts[,colnames(counts) %in%
                           metadata[metadata$ind_id == select_subj,]$sample_id]
 props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
