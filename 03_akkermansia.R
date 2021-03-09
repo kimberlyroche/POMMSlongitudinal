@@ -1,5 +1,7 @@
 # This code identifies individuals with high* Akkermansia.
 
+library(ggplot2)
+
 source("00_functions.R")
 
 # ------------------------------------------------------------------------------
@@ -23,7 +25,7 @@ keep_subject_min <- logical(length(subjects))
 akkermansia_range <- data.frame(value = c(), type = c(), subject = c())
 for(s in 1:length(subjects)) {
   subject <- subjects[s]
-  subj_counts <- counts[, subjects == subject, drop = F]
+  subj_counts <- counts[, which(metadata$ind_id == subject), drop = F]
   subj_props <- apply(subj_counts, 2, function(x) x/sum(x))
   if(mean(subj_props[akkermansia_idx,]) >= threshold) {
     keep_subject_mean[s] <- TRUE
@@ -38,6 +40,9 @@ for(s in 1:length(subjects)) {
                                         type = c("min", "mean", "max"),
                                         subject = subject))
 }
+
+# Show super high scores
+# akkermansia_range[akkermansia_range$type == "max" & akkermansia_range$value > 0.2,]
 
 cat(paste0("Subject meeting MEAN threshold: ",
            sum(keep_subject_mean),
@@ -67,6 +72,11 @@ ggplot(akkermansia_range, aes(x = idx,
   facet_grid(. ~ type) +
   xlab("subject index") +
   ylab("relative abundance (Akkermansia)")
+ggsave(file.path("output", "images", "Akkermansia_thresholds.png"),
+       units = "in",
+       dpi = 100,
+       height = 5,
+       width = 10)
 
 # Use the mean cutoff; pop this data into a model!
 saveRDS(as.numeric(subjects[keep_subject_mean]), file = file.path("data", "akkermansia_subjects.rds"))

@@ -116,7 +116,7 @@ ggplot(data.frame(x = BMI_P95), aes(x = x)) +
 
 testing <- FALSE
 
-if(!file.exists("fitted_model.rds")) {
+if(!file.exists(file.path("output", "fitted_model.rds"))) {
 
   subjects_to_use <- selected_subjects
   if(testing) {
@@ -263,7 +263,7 @@ if(nrow(df_pos) > 0) {
 }
 
 # Diagnostic plotting of "hits"
-df_plot <- df_pos # choose pairs to plot
+df_plot <- df_neg # choose pairs to plot
 for(i in 1:nrow(df_plot)) {
   x <- as.vector(fit.clr$Eta[df_plot[i,]$tag1,,1] - fit.clr$Lambda[df_plot[i,]$tag1,,1]%*%fit.clr$X)
   y <- as.vector(fit.clr$Eta[df_plot[i,]$tag2,,1] - fit.clr$Lambda[df_plot[i,]$tag2,,1]%*%fit.clr$X)

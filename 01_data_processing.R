@@ -197,6 +197,7 @@ cat("Retained taxa account for",
 
 sample_no <- table(metadata$ind_id)
 select_subj <- sample(names(sample_no[sample_no >= 4]), size = 1)
+select_subj <- "191"
 counts_subset <- counts[,colnames(counts) %in%
                           metadata[metadata$ind_id == select_subj,]$sample_id]
 props <- collapse_below_minimum(counts_subset, tax, threshold = 0.01)
@@ -224,7 +225,7 @@ ggsave(file.path("output", "images", paste0("subject_series.png")),
        units = "in",
        dpi = 100,
        height = 6,
-       width = 6)
+       width = 9)
 
 saveRDS(list(counts = counts, tax = tax, metadata = metadata),
         file = file.path("data", "processed_data.rds"))
