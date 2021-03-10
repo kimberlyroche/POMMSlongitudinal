@@ -44,7 +44,8 @@ filter_CIs <- function(Sigma, correlators, threshold) {
 #   Parse data
 # ------------------------------------------------------------------------------
 
-filter_akkermansia <- TRUE
+filter_akkermansia_subjects <- FALSE
+filter_akkermansia_results <- TRUE
 
 data_obj <- readRDS(file.path("data", "processed_data.rds"))
 counts <- data_obj$counts
@@ -56,7 +57,7 @@ subject_tallies <- table(metadata$ind_id)
 subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
 
 akkermansia_list <- file.path("data", "akkermansia_subjects.rds")
-if(filter_akkermansia & file.exists(akkermansia_list)) {
+if(filter_akkermansia_subjects & file.exists(akkermansia_list)) {
   akkermansia_subjects <- readRDS(akkermansia_list)
   subjects <- intersect(subjects, akkermansia_subjects)
 }
@@ -174,6 +175,7 @@ if(!file.exists(file.path("output", "fitted_model.rds"))) {
   
   saveRDS(list(fit = fit, fit.clr = fit.clr, subjects = subject_labels),
           file = file.path("output", "fitted_model.rds"))
+  quit()
 } else {
   fit_obj <- readRDS(file.path("output", "fitted_model.rds"))
   fit <- fit_obj$fit
@@ -222,7 +224,7 @@ ggsave(file.path("output", "images", "Sigma.png"), units = "in", dpi = 100, heig
 
 combos <- combn(1:nrow(mean_Sigma), m = 2)
 
-if(filter_akkermansia) {
+if(filter_akkermansia_results) {
   akkermansia_idx <- which(tax[,6] == "Akkermansia")
   ak_cols <- which(combos[1,] == akkermansia_idx | combos[2,] == akkermansia_idx)
   net_sign <- sapply(1:ncol(combos), function(x) {
@@ -243,9 +245,23 @@ if(filter_akkermansia) {
 negative_correlators <- which(net_sign < 0)
 positive_correlators <- which(net_sign > 0)
 
+# Plot distribution of negative correlators in order to eyeball threshold...
+if(filter_akkermansia_results) {
+  par(mfrow = c(1,2))
+  test <- sapply(negative_correlators, function(x) {
+    Sigma_corr[combos[1,x],combos[2,x],]
+  })
+  hist(c(test))
+  test <- sapply(positive_correlators, function(x) {
+    Sigma_corr[combos[1,x],combos[2,x],]
+  })
+  hist(c(test))
+  par(mfrow = c(1,1))
+}
+
 threshold <- 0.5
-if(filter_akkermansia) {
-  threshold <- 0.25
+if(filter_akkermansia_results) {
+  threshold <- 0.3
 }
 df_neg <- filter_CIs(Sigma_corr, negative_correlators, threshold = -threshold)
 df_pos <- filter_CIs(Sigma_corr, positive_correlators, threshold = threshold)
@@ -263,7 +279,7 @@ if(nrow(df_pos) > 0) {
 }
 
 # Diagnostic plotting of "hits"
-df_plot <- df_neg # choose pairs to plot
+df_plot <- df_pos # choose pairs to plot
 for(i in 1:nrow(df_plot)) {
   x <- as.vector(fit.clr$Eta[df_plot[i,]$tag1,,1] - fit.clr$Lambda[df_plot[i,]$tag1,,1]%*%fit.clr$X)
   y <- as.vector(fit.clr$Eta[df_plot[i,]$tag2,,1] - fit.clr$Lambda[df_plot[i,]$tag2,,1]%*%fit.clr$X)
