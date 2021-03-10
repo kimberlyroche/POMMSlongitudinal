@@ -45,7 +45,8 @@ filter_CIs <- function(Sigma, correlators, threshold) {
 # ------------------------------------------------------------------------------
 
 filter_akkermansia_subjects <- FALSE
-filter_akkermansia_results <- TRUE
+filter_akkermansia_results <- FALSE
+baseline_only <- TRUE
 
 data_obj <- readRDS(file.path("data", "processed_data.rds"))
 counts <- data_obj$counts
@@ -60,6 +61,13 @@ akkermansia_list <- file.path("data", "akkermansia_subjects.rds")
 if(filter_akkermansia_subjects & file.exists(akkermansia_list)) {
   akkermansia_subjects <- readRDS(akkermansia_list)
   subjects <- intersect(subjects, akkermansia_subjects)
+}
+
+if(baseline_only) {
+  # Pull first visit only
+  retain_samples <- metadata[(metadata$visit == 1 & metadata$ind_id %in% subjects),]$sample_id
+  counts <- counts[,colnames(counts) %in% retain_samples]
+  metadata <- metadata[metadata$sample_id %in% retain_samples,]
 }
 
 # ------------------------------------------------------------------------------
@@ -128,7 +136,7 @@ if(!file.exists(file.path("output", "fitted_model.rds"))) {
   bmi_covariate <- c()
   Y <- NULL
   for(subject in subjects_to_use) {
-    subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id]
+    subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id,drop=FALSE]
     if(is.null(Y)) {
       Y <- subject_counts
     } else {
@@ -142,8 +150,12 @@ if(!file.exists(file.path("output", "fitted_model.rds"))) {
   
   # Build design matrix
   subject_labels <- as.factor(subject_labels)
-  X <- t(model.matrix(~subject_labels + bmi_covariate))
-  # X <- matrix(1, 1, ncol(Y)) # intercept-only model
+  if(baseline_only) {
+    X <- t(model.matrix(~bmi_covariate))
+  } else {
+    X <- t(model.matrix(~subject_labels + bmi_covariate))
+    # X <- matrix(1, 1, ncol(Y)) # intercept-only model
+  }
   
   # Filter out taxa totally absent in this subset of subject samples
   Y <- Y[rowSums(Y) > 0,]
@@ -263,6 +275,10 @@ threshold <- 0.5
 if(filter_akkermansia_results) {
   threshold <- 0.3
 }
+if(baseline_only) {
+  threshold <- 0.5
+}
+
 df_neg <- filter_CIs(Sigma_corr, negative_correlators, threshold = -threshold)
 df_pos <- filter_CIs(Sigma_corr, positive_correlators, threshold = threshold)
 
