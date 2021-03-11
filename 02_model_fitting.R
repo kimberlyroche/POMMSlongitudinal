@@ -45,8 +45,8 @@ filter_CIs <- function(Sigma, correlators, threshold) {
 # ------------------------------------------------------------------------------
 
 filter_akkermansia_subjects <- FALSE
-filter_akkermansia_results <- FALSE
-baseline_only <- TRUE
+filter_akkermansia_results <- TRUE
+baseline_only <- FALSE
 
 data_obj <- readRDS(file.path("data", "processed_data.rds"))
 counts <- data_obj$counts
@@ -273,7 +273,7 @@ if(filter_akkermansia_results) {
 
 threshold <- 0.5
 if(filter_akkermansia_results) {
-  threshold <- 0.3
+  threshold <- 0.15
 }
 if(baseline_only) {
   threshold <- 0.5
@@ -295,17 +295,24 @@ if(nrow(df_pos) > 0) {
 }
 
 # Diagnostic plotting of "hits"
-df_plot <- df_pos # choose pairs to plot
+df_plot <- df_neg # choose pairs to plot
 for(i in 1:nrow(df_plot)) {
   x <- as.vector(fit.clr$Eta[df_plot[i,]$tag1,,1] - fit.clr$Lambda[df_plot[i,]$tag1,,1]%*%fit.clr$X)
   y <- as.vector(fit.clr$Eta[df_plot[i,]$tag2,,1] - fit.clr$Lambda[df_plot[i,]$tag2,,1]%*%fit.clr$X)
   tax1 <- get_tax_label(df_plot[i,]$tag1, tax)
   tax2 <- get_tax_label(df_plot[i,]$tag2, tax)
-  p <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
+  if(exists("subject_labels") && length(subject_labels) == length(x)) {
+    p <- ggplot(data.frame(x = x, y = y, subject = subject_labels), aes(x = x, y = y, color = subject)) +
+      scale_color_manual(values = palette)
+  } else {
+    p <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y))
+  }
+  p <- p +
     geom_point(size = 2) +
-    theme_bw() +
     xlab(paste0("CLR(",tax1,")")) +
-    ylab(paste0("CLR(",tax2,")"))
+    ylab(paste0("CLR(",tax2,")")) +
+    theme_bw() +
+    theme(legend.position = "none")
   show(p)
   ggsave(file.path("output", "images", paste0("check_",i,".png")),
          p,
