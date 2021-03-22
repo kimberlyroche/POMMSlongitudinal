@@ -1,5 +1,9 @@
 # These are common/utility functions.
 
+library(tidyverse)
+library(phyloseq)
+library(RColorBrewer)
+
 generate_highcontrast_palette <- function(S) {
   getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
   sample(getPalette(S))

@@ -1,12 +1,3 @@
-# This script fits the (fido::pibble) model.
-
-library(phyloseq)
-library(tidyverse)
-library(RColorBrewer)
-library(driver)
-library(fido)
-
-source("00_functions.R")
 
 # ------------------------------------------------------------------------------
 #   Functions
@@ -40,160 +31,49 @@ filter_CIs <- function(Sigma, correlators, threshold) {
   return(df)
 }
 
-# ------------------------------------------------------------------------------
-#   Parse data
-# ------------------------------------------------------------------------------
-
-filter_akkermansia_subjects <- FALSE
-filter_akkermansia_results <- TRUE
-baseline_only <- FALSE
-
-data_obj <- readRDS(file.path("data", "processed_data.rds"))
-counts <- data_obj$counts
-tax <- data_obj$tax
-metadata <- data_obj$metadata
-rm(data_obj)
-
-subject_tallies <- table(metadata$ind_id)
-subjects <- as.numeric(names(subject_tallies)[which(subject_tallies >= 4)])
-
-akkermansia_list <- file.path("data", "akkermansia_subjects.rds")
-if(filter_akkermansia_subjects & file.exists(akkermansia_list)) {
-  akkermansia_subjects <- readRDS(akkermansia_list)
-  subjects <- intersect(subjects, akkermansia_subjects)
-}
-
-if(baseline_only) {
-  # Pull first visit only
-  retain_samples <- metadata[(metadata$visit == 1 & metadata$ind_id %in% subjects),]$sample_id
-  counts <- counts[,colnames(counts) %in% retain_samples]
-  metadata <- metadata[metadata$sample_id %in% retain_samples,]
-}
-
-# ------------------------------------------------------------------------------
-#   Pull existing metabolic metadata
-# ------------------------------------------------------------------------------
-
-met <- read.table("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.tsv",
-                  header = TRUE,
-                  sep = "\t",
-                  stringsAsFactors = FALSE)
-
-# Baseline BMI95
-BMI_P95 <- sapply(subjects,
-                  function(x) unname(met[met$IND == x,]$BMI_P95))
-names(BMI_P95) <- subjects
-
-# Change in BMI95 and HOMA data
-# delta_BMI <- sapply(subjects,
-#                     function(x) unname(met[met$IND == x,]$Delta_BMI_P95))
-# names(delta_BMI) <- subjects
-# PC_HOMA_IR <- sapply(subjects,
-#                      function(x) unname(met[met$IND == x,]$PC_HOMA_IR))
-# names(PC_HOMA_IR) <- subjects
-
-# Restrict to subjects with extant BMI95 values. It's not clear how best to
-# impute these.
-selected_subjects <- subjects[which(!is.na(BMI_P95))]
-
-# Center and scale these parameters. This bungles interpretation but I don't
-# think we want to directly interpret the regression coefficients for these
-# anyway.
-
-BMI_P95 <- BMI_P95[names(BMI_P95) %in% selected_subjects]
-saved_names <- names(BMI_P95)
-BMI_P95 <- as.vector(scale(BMI_P95, center = FALSE, scale = TRUE))
-names(BMI_P95) <- saved_names
-
-# delta_BMI <- delta_BMI[names(delta_BMI) %in% selected_subjects]
-# saved_names <- names(delta_BMI)
-# delta_BMI <- as.vector(scale(delta_BMI, center = FALSE, scale = TRUE))
-# names(delta_BMI) <- saved_names
-# 
-# PC_HOMA_IR <- PC_HOMA_IR[names(PC_HOMA_IR) %in% selected_subjects]
-# saved_names <- names(PC_HOMA_IR)
-# PC_HOMA_IR <- as.vector(scale(PC_HOMA_IR, center = FALSE, scale = TRUE))
-# names(PC_HOMA_IR) <- saved_names
-
-ggplot(data.frame(x = BMI_P95), aes(x = x)) +
-  geom_histogram(bins = 10, fill = "gray", color = "black") +
-  xlab("Baseline BMI95 distribution")
-
-# ------------------------------------------------------------------------------
-#   Fit model
-# ------------------------------------------------------------------------------
-
-testing <- FALSE
-
-if(!file.exists(file.path("output", "fitted_model.rds"))) {
-
-  subjects_to_use <- selected_subjects
-  if(testing) {
-    subjects_to_use <- selected_subjects[1:10]
-  }
-  
-  subject_labels <- c()
-  bmi_covariate <- c()
-  Y <- NULL
-  for(subject in subjects_to_use) {
-    subject_counts <- counts[,colnames(counts) %in% metadata[metadata$ind_id == subject,]$sample_id,drop=FALSE]
-    if(is.null(Y)) {
-      Y <- subject_counts
-    } else {
-      Y <- cbind(Y, subject_counts)
-    }
-    subject_labels <- c(subject_labels, rep(subject, ncol(subject_counts)))
-    baseline_scaled_bmi <- unname(BMI_P95[which(names(BMI_P95) == subject)])
-    bmi_covariate <- c(bmi_covariate,
-                       rep(baseline_scaled_bmi, ncol(subject_counts)))
-  }
-  
-  # Build design matrix
-  subject_labels <- as.factor(subject_labels)
-  if(baseline_only) {
-    X <- t(model.matrix(~bmi_covariate))
+# Test to see if an association is outside the 90% interval of permutations
+test_assoc <- function(S1, S_arr, idx1, idx2, alpha = 0.05, verbose = FALSE) {
+  obs <- S_arr[idx1,idx2,]
+  bounds <- quantile(obs, probs = c(alpha/2, 1-alpha/2))
+  result <- S1[idx1,idx2] < bounds[[1]] | S1[idx1,idx2] > bounds[[2]]
+  if(verbose) {
+    return(list(result = result, obs_corr = S1[idx1,idx2], possible_corr = obs))
   } else {
-    X <- t(model.matrix(~subject_labels + bmi_covariate))
-    # X <- matrix(1, 1, ncol(Y)) # intercept-only model
+    return(list(result = result))
   }
-  
-  # Filter out taxa totally absent in this subset of subject samples
-  Y <- Y[rowSums(Y) > 0,]
-  Y <- as.matrix(Y)
-  
-  # Set priors a la
-  # https://jsilve24.github.io/fido/articles/introduction-to-fido.html
-  upsilon <- nrow(Y) + 3
-  Omega <- diag(nrow(Y))
-  G <- cbind(diag(nrow(Y)-1), -1)
-  Xi <- (upsilon-nrow(Y))*G%*%Omega%*%t(G)
-  alr_Y <- alr_array(Y + 1, parts = 1)
-  Theta <- matrix(rowMeans(alr_Y), nrow(Y)-1, nrow(X))
-  Gamma <- diag(nrow(X))
-  
-  # Fit model and convert to CLR
-  cat("Fitting model...\n")
-  fit <- pibble(as.matrix(Y),
-                X,
-                upsilon,
-                Theta,
-                Gamma,
-                Xi,
-                n_samples = 1000,
-                ret_mean = TRUE)
-  
-  cat("Model fit!\n")
-  fit.clr <- to_clr(fit)
-  
-  saveRDS(list(fit = fit, fit.clr = fit.clr, subjects = subject_labels),
-          file = file.path("output", "fitted_model.rds"))
-  quit()
-} else {
-  fit_obj <- readRDS(file.path("output", "fitted_model.rds"))
-  fit <- fit_obj$fit
-  fit.clr <- fit_obj$fit.clr
-  subjects_to_use <- fit_obj$subjects
 }
+
+
+# ------------------------------------------------------------------------------
+#   Find "hits" by permutation
+# ------------------------------------------------------------------------------
+
+
+canonical_Sigma <- fit_obj$fit.clr$Sigma[,,1]
+canonical_Sigma <- cov2cor(canonical_Sigma)
+if(permutation_test) {
+  n_permute <- 100
+  permuted_Sigmas <- array(NA, dim = c(nrow(tax), nrow(tax), n_permute))
+  for(pp in 1:n_permute) {
+    fit_obj <- fit_model(subjects_to_use, Y, X, metadata, permute = TRUE, MAP = TRUE)
+    permuted_Sigmas[,,pp] <- cov2cor(fit_obj$fit.clr$Sigma[,,1])
+  }
+}
+
+
+
+
+
+
+# Find "hits"
+pairs <- combn(1:nrow(tax), m = 2)
+results <- sapply(1:100, function(c_idx) {
+  res <- test_assoc(canonical_Sigma, permuted_Sigmas, pairs[1,c_idx], pairs[2,c_idx], verbose = TRUE)
+  if(res$result) {
+    plot(density(res$possible_corr), main = paste0("Pair ",c_idx))
+    lines(x = rep(res$obs_corr, 2), y = c(0, 100), col = "red")
+  }
+})
 
 # ------------------------------------------------------------------------------
 #   Visualize taxon-taxon correlation matrix
