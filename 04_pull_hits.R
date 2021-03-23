@@ -8,7 +8,7 @@ source("00_functions.R")
 #   Global vars
 # ------------------------------------------------------------------------------
 
-# See README.txt for a list of possible scenarios here.
+# See INSTRUCTIONS.txt for a list of possible scenarios here.
 
 # Filter to only Akkermansia-related correlations.
 filter_akkermansia_results <- FALSE

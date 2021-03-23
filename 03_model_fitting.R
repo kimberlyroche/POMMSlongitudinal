@@ -16,13 +16,10 @@ source("00_functions.R")
 baseline_only <- FALSE
 
 # Fit model on permutation of data.
-permutation_test <- FALSE
+permutation_test <- TRUE
 
 # Use only high Akkermansia subjects.
-filter_akkermansia_subjects <- TRUE
-
-# Filter to only Akkermansia-related correlations.
-filter_akkermansia_results <- FALSE
+filter_akkermansia_subjects <- FALSE
 
 # If TRUE, includes P95 BMI as a covariate in the model, theoretically to
 # suppress the effect of variation driven by differences in subject BMI.
@@ -31,7 +28,7 @@ include_BMI <- TRUE
 
 # If TRUE, subsets to 5 subjects so the model fits quickly. This is just for
 # testing the effects of various parameterizations.
-testing <- TRUE
+testing <- FALSE
 
 # ------------------------------------------------------------------------------
 #   Functions
