@@ -71,49 +71,61 @@ tax <- data_obj$tax
 
 canonical_fit <- readRDS(file.path("output", "fitted_models", "model_canonical.rds"))
 
+canonical_Sigma <- canonical_fit$fit.clr$Sigma[,,1]
+canonical_Sigma <- cov2cor(canonical_Sigma)
+
 # Pull all permuted output
 permutation_files <- list.files(path = file.path("output", "fitted_models"),
                                 pattern = "model_\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}\\.rds",
                                 full.names = TRUE)
-canonical_Sigma <- canonical_fit$fit.clr$Sigma[,,1]
-canonical_Sigma <- cov2cor(canonical_Sigma)
-permuted_Sigmas <- array(NA, dim = c(nrow(canonical_Sigma),
-                                     ncol(canonical_Sigma),
-                                     length(permutation_files)))
-for(f in 1:length(permutation_files)) {
-  fit_obj <- readRDS(permutation_files[f])
-  permuted_Sigmas[,,f] <- cov2cor(fit_obj$fit.clr$Sigma[,,1])
-}
 
-# Find "hits"
-pairs <- combn(1:nrow(canonical_Sigma), m = 2)
-if(filter_akkermansia_results) {
-  akkermansia_idx <- which(tax[,6] == "Akkermansia")
-  ak_cols <- which(pairs[1,] == akkermansia_idx | pairs[2,] == akkermansia_idx)
+if(length(permutation_files) >= 20) {
+  permuted_Sigmas <- array(NA, dim = c(nrow(canonical_Sigma),
+                                       ncol(canonical_Sigma),
+                                       length(permutation_files)))
+  for(f in 1:length(permutation_files)) {
+    fit_obj <- readRDS(permutation_files[f])
+    permuted_Sigmas[,,f] <- cov2cor(fit_obj$fit.clr$Sigma[,,1])
+  }
   
-  results <- t(sapply(ak_cols, function(c_idx) {
-    res <- test_association(canonical_Sigma, permuted_Sigmas, pairs[1,c_idx], pairs[2,c_idx], verbose = TRUE)
-    res[1:2]
-  }))
-  results <- data.frame(result = unlist(results[,1]), corr = unlist(results[,2]))
-  results$tax1_idx <- pairs[1,ak_cols]
-  results$tax2_idx <- pairs[2,ak_cols]
-  results$tax1_label <- sapply(results$tax1_idx, function(x) get_tax_label(x, tax))
-  results$tax2_label <- sapply(results$tax2_idx, function(x) get_tax_label(x, tax))
-  results <- results %>%
-    select(!result)
+  # Find "hits"
+  pairs <- combn(1:nrow(canonical_Sigma), m = 2)
+  if(filter_akkermansia_results) {
+    akkermansia_idx <- which(tax[,6] == "Akkermansia")
+    ak_cols <- which(pairs[1,] == akkermansia_idx | pairs[2,] == akkermansia_idx)
+    
+    results <- t(sapply(ak_cols, function(c_idx) {
+      res <- test_association(canonical_Sigma, permuted_Sigmas, pairs[1,c_idx], pairs[2,c_idx], verbose = TRUE)
+      res[1:2]
+    }))
+    results <- data.frame(result = unlist(results[,1]), corr = unlist(results[,2]))
+    results$tax1_idx <- pairs[1,ak_cols]
+    results$tax2_idx <- pairs[2,ak_cols]
+    results$tax1_label <- sapply(results$tax1_idx, function(x) get_tax_label(x, tax))
+    results$tax2_label <- sapply(results$tax2_idx, function(x) get_tax_label(x, tax))
+    results <- results %>%
+      select(!result)
+  } else {
+    results <- t(sapply(1:ncol(pairs), function(c_idx) {
+      res <- test_association(canonical_Sigma, permuted_Sigmas, pairs[1,c_idx], pairs[2,c_idx], verbose = TRUE)
+      res[1:2]
+    }))
+    results <- data.frame(result = unlist(results[,1]), corr = unlist(results[,2]))
+    results$tax1_idx <- pairs[1,]
+    results$tax2_idx <- pairs[2,]
+    results$tax1_label <- sapply(results$tax1_idx, function(x) get_tax_label(x, tax))
+    results$tax2_label <- sapply(results$tax2_idx, function(x) get_tax_label(x, tax))
+    results <- results %>%
+      select(!result)
+  }
 } else {
-  results <- t(sapply(1:ncol(pairs), function(c_idx) {
-    res <- test_association(canonical_Sigma, permuted_Sigmas, pairs[1,c_idx], pairs[2,c_idx], verbose = TRUE)
-    res[1:2]
-  }))
-  results <- data.frame(result = unlist(results[,1]), corr = unlist(results[,2]))
-  results$tax1_idx <- pairs[1,]
-  results$tax2_idx <- pairs[2,]
-  results$tax1_label <- sapply(results$tax1_idx, function(x) get_tax_label(x, tax))
-  results$tax2_label <- sapply(results$tax2_idx, function(x) get_tax_label(x, tax))
-  results <- results %>%
-    select(!result)
+  # We couldn't find (enough) permutations; we'll just take the MAP estimates
+  # from the model output as given.
+  results <- data.frame(tax1_idx = pairs[1,],
+                        tax2_idx = pairs[2,],
+                        tax1_label = sapply(results$tax1_idx, function(x) get_tax_label(x, tax)),
+                        tax2_label = sapply(results$tax2_idx, function(x) get_tax_label(x, tax)),
+                        corr = canonical_Sigma[lower.tri(canonical_Sigma, diag = FALSE)])
 }
 
 # Plot top 10 results (in terms of magnitude of correlations)
@@ -131,7 +143,9 @@ for(i in 1:nrow(plot_results)) {
 
 # Write out results.
 simple_results <- results %>%
-  select(tax1_label, tax2_label, corr)
+  select(tax1_label, tax2_label, corr) %>%
+  arrange(desc(abs(corr)))
+
 colnames(simple_results) <- c("taxon1", "taxon2", "correlation")
 
 write.table(simple_results, file.path("output", "fitted_models", "correlators.tsv"), row.names = FALSE, sep = "\t")
