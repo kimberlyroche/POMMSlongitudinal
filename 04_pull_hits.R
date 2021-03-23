@@ -73,12 +73,14 @@ canonical_fit <- readRDS(file.path("output", "fitted_models", "model_canonical.r
 
 canonical_Sigma <- canonical_fit$fit.clr$Sigma[,,1]
 canonical_Sigma <- cov2cor(canonical_Sigma)
+pairs <- combn(1:nrow(canonical_Sigma), m = 2)
 
 # Pull all permuted output
 permutation_files <- list.files(path = file.path("output", "fitted_models"),
                                 pattern = "model_\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}\\.rds",
                                 full.names = TRUE)
 
+cat(paste0("Found ",length(permutation_files)," files...\n"))
 if(length(permutation_files) >= 20) {
   permuted_Sigmas <- array(NA, dim = c(nrow(canonical_Sigma),
                                        ncol(canonical_Sigma),
@@ -89,7 +91,6 @@ if(length(permutation_files) >= 20) {
   }
   
   # Find "hits"
-  pairs <- combn(1:nrow(canonical_Sigma), m = 2)
   if(filter_akkermansia_results) {
     akkermansia_idx <- which(tax[,6] == "Akkermansia")
     ak_cols <- which(pairs[1,] == akkermansia_idx | pairs[2,] == akkermansia_idx)
@@ -123,9 +124,9 @@ if(length(permutation_files) >= 20) {
   # from the model output as given.
   results <- data.frame(tax1_idx = pairs[1,],
                         tax2_idx = pairs[2,],
-                        tax1_label = sapply(results$tax1_idx, function(x) get_tax_label(x, tax)),
-                        tax2_label = sapply(results$tax2_idx, function(x) get_tax_label(x, tax)),
                         corr = canonical_Sigma[lower.tri(canonical_Sigma, diag = FALSE)])
+  results$tax1_label = sapply(results$tax1_idx, function(x) get_tax_label(x, tax))
+  results$tax2_label = sapply(results$tax2_idx, function(x) get_tax_label(x, tax))
 }
 
 # Plot top 10 results (in terms of magnitude of correlations)
