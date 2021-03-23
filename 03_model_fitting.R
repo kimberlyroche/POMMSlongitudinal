@@ -10,11 +10,13 @@ source("00_functions.R")
 #   Global vars
 # ------------------------------------------------------------------------------
 
+# See README.txt for a list of possible scenarios here.
+
 # Use baseline samples only.
 baseline_only <- FALSE
 
 # Fit model on permutation of data.
-permutation_test <- TRUE
+permutation_test <- FALSE
 
 # Use only high Akkermansia subjects.
 filter_akkermansia_subjects <- TRUE
@@ -196,11 +198,11 @@ if(permutation_test) {
   saveRDS(fit_obj,
           file = file.path("output",
                            "fitted_models",
-                           paste0("fitted_model_",
+                           paste0("model_",
                                   UUIDgenerate(),
                                   ".rds")))
 } else {
   saveRDS(fit_obj, file = file.path("output",
                                     "fitted_models",
-                                    "canonical.rds"))
+                                    "model_canonical.rds"))
 }

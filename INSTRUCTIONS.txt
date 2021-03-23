@@ -1,0 +1,37 @@
+Scenarios
+
+The model must be fit once to the data and then subsequently (many times) to
+"permutations" of the data set (where taxa are shuffled across samples).
+
+  In `03_model_fitting.R` set `permutation_test <- FALSE` and run the script
+  once to generate the "canonical" output then set `permutation_test <- TRUE`
+  and re-run the script as many times as you want samples from the null
+  distribution to evaluate significance against. (These will be saved as
+  specially named output files.)
+
+(A) Baseline-only samples VS. (B) full series
+
+  For (A), in `03_model_fitting.R` set
+    baseline_only <- TRUE
+    
+  For (B), in `03_model_fitting.R` set
+    baseline_only <- FALSE
+   
+    
+(A) All subjects VS. (B) Akkermansia-rich subjects
+
+  For (A), in `03_model_fitting.R` set
+    filter_akkermansia_subjects <- FALSE
+    
+  For (B), in `03_model_fitting.R` set
+    filter_akkermansia_subjects <- TRUE
+    
+    
+(A) Akkermansia-only correlations VS. (B) all pairwise correlations between
+                                          (CLR) taxa
+
+  For (A), in `04_pull_hits.R` set
+    filter_akkermansia_results <- TRUE
+    
+  For (B), in `04_pull_hits.R` set
+    filter_akkermansia_results <- FALSE
