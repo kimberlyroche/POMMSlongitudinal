@@ -93,7 +93,7 @@ for(i in 1:nrow(tax)) {
 agglomerated_counts <- NULL
 for(tax_level in 1:6) {
   cat("Agglomerating at tax level:",colnames(tax)[tax_level],"\n")
-  counts_subset <- as.data.frame(cbind(tax, t(counts)))
+  counts_subset <- as.data.frame(cbind(tax, t(counts)), stringsAsFactors = FALSE)
   counts_subset <- counts_subset[which(!is.na(counts_subset[,tax_level]) &
                                          is.na(counts_subset[,tax_level+1])),]
   copy_long <- pivot_longer(counts_subset,
