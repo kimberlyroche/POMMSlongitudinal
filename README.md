@@ -1,10 +1,14 @@
 # POMMSlongitudinal
 
-[Explain what model does.]
+This code fits a multinomial logistic normal regression model to the POMMS longitudinal data. As
+part of that fitted model, we can extract a set of inferred correlations across centered-logratio
+bacterial taxa.
 
 ## Files
 
-This repo consist of analysis files numbered to indicate the order in which they should be run.
+This repo consist of analysis files numbered to indicate the order in which they should be run. 
+_Several of these files have global variables at the top of the script that should be set prior to
+a run._ See the section on **parameterizations** below.
 
 **00_functions.R** contains functions re-used through analyses.
 
@@ -24,14 +28,16 @@ bacteria that are likely to be significant.
 
 ## Regarding permutation testing 
 
-The model must be fit once to the data and then subsequently (many times) to
-"permutations" of the data set (where taxa are shuffled across samples).
+The model must be fit once to the data and then subsequently (many times) to "permutations" of
+the data set (where taxa are shuffled across samples). These permutations give us a background
+of "null" (spurrious) correlations against which to select potentially significant ones.
 
-  In `03_model_fitting.R` set `permutation_test <- FALSE` and run the script
-  once to generate the "canonical" output then set `permutation_test <- TRUE`
-  and re-run the script as many times as you want samples from the null
-  distribution to evaluate significance against. (These will be saved as
-  specially named output files.)
+To do the permutation testing: in `03_model_fitting.R` set `permutation_test <- FALSE` and run
+the script once to generate the "canonical" output then set `permutation_test <- TRUE` and 
+re-run the script as many times as you want samples from the null distribution to evaluate 
+significance against. (These will be saved as specially named output files.)
+
+## Permutations
 
 (A) Baseline-only samples VS. (B) full series
 
