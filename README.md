@@ -39,7 +39,7 @@ significance against. (These will be saved as specially named output files.)
 
 ## Permutations
 
-Selecting (A) baseline-only samples vs. (B) full series:
+### Selecting (A) baseline-only samples vs. (B) full series:
 
   For (A), in `03_model_fitting.R` set
     baseline_only <- TRUE
@@ -47,7 +47,7 @@ Selecting (A) baseline-only samples vs. (B) full series:
   For (B), in `03_model_fitting.R` set
     baseline_only <- FALSE
     
-Selecting (A) all subjects vs. (B) Akkermansia-rich subjects
+### Selecting (A) all subjects vs. (B) Akkermansia-rich subjects
 
   For (A), in `03_model_fitting.R` set
     filter_akkermansia_subjects <- FALSE
@@ -55,7 +55,7 @@ Selecting (A) all subjects vs. (B) Akkermansia-rich subjects
   For (B), in `03_model_fitting.R` set
     filter_akkermansia_subjects <- TRUE
     
-Selecting (A) Akkermansia-only correlations VS. (B) all pairwise correlations between (CLR) taxa
+### Selecting (A) Akkermansia-only correlations VS. (B) all pairwise correlations between (CLR) taxa
 
   For (A), in `04_pull_hits.R` set
     filter_akkermansia_results <- TRUE
