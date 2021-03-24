@@ -16,7 +16,7 @@ source("00_functions.R")
 baseline_only <- FALSE
 
 # Fit model on permutation of data.
-permutation_test <- TRUE
+permutation_test <- FALSE
 
 # Use only high Akkermansia subjects.
 filter_akkermansia_subjects <- FALSE

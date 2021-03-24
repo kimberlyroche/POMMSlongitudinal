@@ -1,7 +1,5 @@
 # This script parses model output to find correlated pairs of (CLR) taxa.
 
-library(stringr)
-
 source("00_functions.R")
 
 # ------------------------------------------------------------------------------
