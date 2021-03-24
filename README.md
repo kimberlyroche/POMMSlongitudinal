@@ -4,6 +4,14 @@ This code fits a multinomial logistic normal regression model to the POMMS longi
 part of that fitted model, we can extract a set of inferred correlations across centered-logratio
 bacterial taxa.
 
+## Required libraries
+
+These scripts require the following libraries: `tidyverse`, `phyloseq` (via Bioconductor), `RColorBrewer`, and `uuid`.
+
+Additional required libraries (via Github) are:
+- `driver`: https://github.com/jsilve24/driver
+- `fido`: https://github.com/jsilve24/fido
+
 ## Files
 
 This repo consist of analysis files numbered to indicate the order in which they should be run. 
