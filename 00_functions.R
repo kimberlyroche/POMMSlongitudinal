@@ -4,6 +4,10 @@ library(tidyverse)
 library(phyloseq)
 library(RColorBrewer)
 
+dir.create("output", showWarnings = FALSE)
+dir.create(file.path("output", "images"), showWarnings = FALSE)
+dir.create(file.path("output", "fitted_models"), showWarnings = FALSE)
+
 generate_highcontrast_palette <- function(S) {
   getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
   sample(getPalette(S))
