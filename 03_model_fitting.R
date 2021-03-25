@@ -2,6 +2,7 @@
 
 library(driver)
 library(fido)
+library(readxl)
 library(uuid)
 
 source("00_functions.R")
@@ -111,10 +112,14 @@ if(baseline_only) {
 # ------------------------------------------------------------------------------
 
 if(include_BMI) {
-  met <- read.table("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.tsv",
-                    header = TRUE,
-                    sep = "\t",
-                    stringsAsFactors = FALSE)
+  # alt. tsv version
+  # met <- read.table("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.tsv",
+  #                   header = TRUE,
+  #                   sep = "\t",
+  #                   stringsAsFactors = FALSE)
+  
+  met <- readxl::read_xlsx("data/MET-S-nonCook_7-23-20pedsobesity_r24_phenotype_wide_20200723.xlsx")
+  
   BMI_P95 <- sapply(subjects,
                     function(x) unname(met[met$IND == x,]$BMI_P95))
   names(BMI_P95) <- subjects
