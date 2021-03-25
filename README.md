@@ -6,7 +6,8 @@ bacterial taxa.
 
 ## Required libraries
 
-These scripts require the following libraries: `tidyverse`, `phyloseq` (via Bioconductor), `RColorBrewer`, and `uuid`.
+These scripts require the following libraries: `tidyverse`, `phyloseq` (via Bioconductor), `RColorBrewer`,
+`readxl`, and `uuid`.
 
 Additional required libraries (via Github) are:
 - `driver`: https://github.com/jsilve24/driver
