@@ -45,7 +45,6 @@ plot_pair <- function(model_fit, idx1, idx2, label1, label2) {
     ylab(paste0("CLR(",tax2,")")) +
     theme_bw() +
     theme(legend.position = "none")
-  show(p)
   ggsave(file.path("output",
                    "images",
                    paste0("pair_",

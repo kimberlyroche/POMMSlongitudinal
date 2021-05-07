@@ -42,7 +42,7 @@ for(s in 1:length(subjects)) {
 # Plot.
 if(plot_subject_rel_ab) {
   akkermansia_range$idx <- rep(1:length(subjects), 3)
-  ggplot(akkermansia_range, aes(x = idx,
+  p <- ggplot(akkermansia_range, aes(x = idx,
                                 y = value,
                                 color = type)) +
     geom_point() +
@@ -52,6 +52,7 @@ if(plot_subject_rel_ab) {
     xlab("subject index") +
     ylab("relative abundance (Akkermansia)")
   ggsave(file.path("output", "images", "Akkermansia_thresholds.png"),
+         p,
          units = "in",
          dpi = 100,
          height = 5,

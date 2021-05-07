@@ -221,7 +221,6 @@ if(plot_sample_series) {
                              x = sample_index)) +
     geom_bar(position = "stack", stat = "identity") +
     scale_fill_manual(values = palette)
-  show(p)
   ggsave(file.path("output", "images", paste0("subject_series.png")),
          p,
          units = "in",
